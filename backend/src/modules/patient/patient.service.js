@@ -104,6 +104,16 @@ export async function createBooking(patientId, { hospitalId, vaccineId, slotDayI
             if (!sessionEntry)           throw new AppError("Session not found", 404);
             if (sessionEntry.booked >= sessionEntry.limit) throw new AppError("This session is fully booked", 409);
 
+            // Reserve one dose from hospital inventory.
+            const invUpdate = await HospitalVaccine.updateOne(
+                { hospitalId, vaccineId, isActive: true, availableStock: { $gt: 0 } },
+                { $inc: { availableStock: -1 } },
+                { session }
+            );
+            if (!invUpdate.modifiedCount) {
+                throw new AppError("Selected vaccine is out of stock", 409);
+            }
+
             // increment booked count atomically
             await VaccineSlotDay.updateOne(
                 { _id: slotDayId, "sessions.name": sessionName },
@@ -159,6 +169,13 @@ export async function cancelMyBooking(patientId, bookingId) {
             await VaccineSlotDay.updateOne(
                 { _id: booking.slotDayId, "sessions.name": booking.sessionName },
                 { $inc: { "sessions.$.booked": -1 } },
+                { session }
+            );
+
+            // Return one dose back to inventory.
+            await HospitalVaccine.updateOne(
+                { hospitalId: booking.hospitalId, vaccineId: booking.vaccineId, isActive: true },
+                { $inc: { availableStock: 1 } },
                 { session }
             );
 

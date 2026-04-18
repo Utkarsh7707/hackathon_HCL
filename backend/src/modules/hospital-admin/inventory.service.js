@@ -2,12 +2,8 @@ import HospitalVaccine from "../../models/HospitalVaccine.js";
 import Vaccine from "../../models/Vaccine.js";
 import { AppError } from "../../utils/appError.js";
 
-export async function getInventory(hospitalId) {
-    const items = await HospitalVaccine.find({ hospitalId })
-        .populate("vaccineId", "name type manufacturer dosesRequired")
-        .sort({ createdAt: -1 });
-
-    return items.map((item) => ({
+function toInventoryView(item) {
+    return {
         id:             item.id,
         vaccine:        item.vaccineId,
         totalStock:     item.totalStock,
@@ -16,7 +12,15 @@ export async function getInventory(hospitalId) {
         pricePerDose:   item.pricePerDose,
         isActive:       item.isActive,
         updatedAt:      item.updatedAt,
-    }));
+    };
+}
+
+export async function getInventory(hospitalId) {
+    const items = await HospitalVaccine.find({ hospitalId })
+        .populate("vaccineId", "name type manufacturer dosesRequired")
+        .sort({ createdAt: -1 });
+
+    return items.map(toInventoryView);
 }
 
 export async function addToInventory(hospitalId, { vaccineId, totalStock, pricePerDose }) {
@@ -31,7 +35,8 @@ export async function addToInventory(hospitalId, { vaccineId, totalStock, priceP
         existing.pricePerDose    = pricePerDose;
         existing.isActive        = true;
         await existing.save();
-        return existing.populate("vaccineId", "name type manufacturer dosesRequired");
+        await existing.populate("vaccineId", "name type manufacturer dosesRequired");
+        return toInventoryView(existing);
     }
 
     const item = await HospitalVaccine.create({
@@ -43,7 +48,8 @@ export async function addToInventory(hospitalId, { vaccineId, totalStock, priceP
         isActive: true,
     });
 
-    return item.populate("vaccineId", "name type manufacturer dosesRequired");
+    await item.populate("vaccineId", "name type manufacturer dosesRequired");
+    return toInventoryView(item);
 }
 
 export async function updateInventory(id, hospitalId, updates) {
@@ -58,7 +64,8 @@ export async function updateInventory(id, hospitalId, updates) {
     if (updates.isActive     !== undefined) item.isActive     = updates.isActive;
 
     await item.save();
-    return item.populate("vaccineId", "name type manufacturer dosesRequired");
+    await item.populate("vaccineId", "name type manufacturer dosesRequired");
+    return toInventoryView(item);
 }
 
 export async function removeFromInventory(id, hospitalId) {

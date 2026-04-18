@@ -1,4 +1,4 @@
-import { getVerifications, reviewVerification } from "./super-admin.service.js";
+import { getVerifications, reviewVerification, setHospitalAccessState } from "./super-admin.service.js";
 import { AppError } from "../../utils/appError.js";
 
 export async function listVerifications(req, res) {
@@ -21,6 +21,32 @@ export async function decideVerification(req, res) {
     return res.status(200).json({
         success: true,
         message: `Hospital ${decision}d successfully.`,
+        data: result,
+    });
+}
+
+export async function blacklistHospital(req, res) {
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    const result = await setHospitalAccessState(id, req.user.id, "blacklist", notes ?? "Blacklisted by super admin");
+
+    return res.status(200).json({
+        success: true,
+        message: "Hospital blacklisted successfully.",
+        data: result,
+    });
+}
+
+export async function unblacklistHospital(req, res) {
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    const result = await setHospitalAccessState(id, req.user.id, "unblacklist", notes ?? "Access restored by super admin");
+
+    return res.status(200).json({
+        success: true,
+        message: "Hospital access restored successfully.",
         data: result,
     });
 }

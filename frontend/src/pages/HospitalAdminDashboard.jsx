@@ -181,6 +181,54 @@ function RejectedState({ hospitalName, reviewNotes, onLogout }) {
   );
 }
 
+function BlacklistedState({ hospitalName, reviewNotes, onLogout }) {
+  const cardRef = useRef(null);
+  useEffect(() => {
+    gsap.fromTo(cardRef.current,
+      { y: 30, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' }
+    );
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+      <div ref={cardRef} className="bg-white rounded-2xl border border-slate-300 shadow-sm max-w-md w-full p-8 space-y-5">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-2xl bg-slate-200 flex items-center justify-center">
+            <XCircle size={32} className="text-slate-700" />
+          </div>
+          <div className="text-center">
+            <h2 className="font-extrabold text-slate-800 text-lg">Hospital Blacklisted</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              <span className="font-semibold text-slate-700">{hospitalName}</span> is blacklisted for now.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-slate-100 border border-slate-200 rounded-xl p-4">
+          <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 mb-2">
+            <AlertTriangle size={12} /> Message from Super Admin
+          </p>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            {reviewNotes?.trim() || 'Your hospital access has been temporarily suspended by the super admin.'}
+          </p>
+        </div>
+
+        <p className="text-xs text-center text-slate-400 bg-slate-50 rounded-xl p-3">
+          Contact support or super admin to restore access.
+        </p>
+
+        <button
+          onClick={onLogout}
+          className="w-full py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+        >
+          Back to Login
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'overview',     label: 'Overview',     icon: LayoutDashboard },
   { id: 'inventory',    label: 'Inventory',    icon: Syringe         },
@@ -286,6 +334,7 @@ export default function HospitalAdminDashboard({ user, hospital, verification, t
 
   if (!docsSubmitted)        return <DocsPendingState hospitalName={hospitalName} onLogout={onLogout} />;
   if (status === 'rejected') return <RejectedState    hospitalName={hospitalName} reviewNotes={reviewNotes} onLogout={onLogout} />;
+  if (status === 'suspended') return <BlacklistedState hospitalName={hospitalName} reviewNotes={reviewNotes} onLogout={onLogout} />;
   if (status !== 'approved') return <PendingState     hospitalName={hospitalName} onLogout={onLogout} onRefresh={onRefresh} />;
   return <ApprovedDashboard user={user} hospital={hospital} token={token} onLogout={onLogout} />;
 }
