@@ -11,6 +11,7 @@ import { connectDB, disconnectDB } from "../config/db.js";
 import env from "../config/env.js";
 import User from "../models/User.js";
 import GovtHospitalRegistry from "../models/GovtHospitalRegistry.js";
+import Vaccine from "../models/Vaccine.js";
 
 /* ─── colour helpers ─── */
 const c = {
@@ -110,6 +111,42 @@ async function seedSuperAdmin(force) {
   log.warn(`Default password: ${c.bold(SUPER_ADMIN.password)}  — change this immediately!`);
 }
 
+/* ─── master vaccine catalog ─── */
+const VACCINES = [
+  { name: "COVID-19 (Covishield)",     type: "covid19",     manufacturer: "Serum Institute of India",  dosesRequired: 2, description: "AstraZeneca/Oxford COVID-19 vaccine" },
+  { name: "COVID-19 (Covaxin)",        type: "covid19",     manufacturer: "Bharat Biotech",            dosesRequired: 2, description: "India's indigenous inactivated COVID-19 vaccine" },
+  { name: "Influenza (Fluzone HD)",    type: "influenza",   manufacturer: "Sanofi Pasteur",            dosesRequired: 1, description: "High-dose seasonal influenza vaccine" },
+  { name: "Hepatitis B (Engerix-B)",   type: "hepatitisB",  manufacturer: "GlaxoSmithKline",           dosesRequired: 3, description: "Recombinant Hepatitis B surface antigen vaccine" },
+  { name: "Hepatitis A (Havrix)",      type: "hepatitisA",  manufacturer: "GlaxoSmithKline",           dosesRequired: 2, description: "Inactivated Hepatitis A virus vaccine" },
+  { name: "Typhoid (Typbar-TCV)",      type: "typhoid",     manufacturer: "Bharat Biotech",            dosesRequired: 1, description: "Typhoid Conjugate Vaccine — single dose protection" },
+  { name: "HPV (Gardasil 9)",          type: "hpv",         manufacturer: "Merck",                     dosesRequired: 2, description: "Protects against 9 HPV strains" },
+  { name: "MMR (M-M-R II)",            type: "mmr",         manufacturer: "Merck",                     dosesRequired: 2, description: "Measles, Mumps & Rubella combination vaccine" },
+  { name: "Varicella (Varivax)",       type: "varicella",   manufacturer: "Merck",                     dosesRequired: 2, description: "Live attenuated chickenpox vaccine" },
+  { name: "Rabies (Verorab)",          type: "rabies",      manufacturer: "Sanofi Pasteur",            dosesRequired: 3, description: "Pre/post-exposure rabies prophylaxis" },
+];
+
+async function seedVaccines(force) {
+  log.section("Master Vaccine Catalog");
+
+  if (force) {
+    const { deletedCount } = await Vaccine.deleteMany({});
+    if (deletedCount) log.warn(`Cleared ${deletedCount} existing vaccine entries (--force)`);
+  }
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const v of VACCINES) {
+    const exists = await Vaccine.findOne({ name: v.name });
+    if (exists) { skipped++; log.skip(`Already exists: ${v.name}`); continue; }
+    await Vaccine.create(v);
+    log.ok(`Vaccine: ${c.cyan(v.name)}  ${c.dim(`— ${v.manufacturer}`)}`);
+    created++;
+  }
+
+  log.info(`${c.green(created)} created, ${c.dim(skipped + " skipped")}`);
+}
+
 /* ─── seed govt registry ─── */
 async function seedGovtRegistry(force) {
   log.section("Government Hospital Registry");
@@ -156,6 +193,7 @@ async function main() {
 
   await seedSuperAdmin(force);
   await seedGovtRegistry(force);
+  await seedVaccines(force);
 
   console.log(c.bold("\n✅  Seed complete.\n"));
   await disconnectDB();
