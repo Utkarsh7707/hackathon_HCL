@@ -78,6 +78,22 @@ export async function createBooking(patientId, { hospitalId, vaccineId, slotDayI
 
     try {
         await session.withTransaction(async () => {
+            // Prevent duplicate booking for the same vaccine on the same date.
+            const existingBooking = await Booking.findOne(
+                {
+                    patientId,
+                    vaccineId,
+                    date,
+                    status: { $in: ["confirmed", "completed"] },
+                },
+                null,
+                { session }
+            );
+
+            if (existingBooking) {
+                throw new AppError("You already have a booking for this vaccine on this date", 409);
+            }
+
             const slotDay = await VaccineSlotDay.findOne(
                 { _id: slotDayId, hospitalId, vaccineId, date, isActive: true },
                 null, { session }
@@ -122,4 +138,40 @@ export async function getMyBookings(patientId) {
         .sort({ createdAt: -1 });
 
     return bookings.map((b) => b.toJSON());
+}
+
+/* ── cancel booking (atomic) ── */
+export async function cancelMyBooking(patientId, bookingId) {
+    const session = await mongoose.startSession();
+    let cancelled;
+
+    try {
+        await session.withTransaction(async () => {
+            const booking = await Booking.findOne({ _id: bookingId, patientId }, null, { session });
+            if (!booking) throw new AppError("Booking not found", 404);
+            if (booking.status !== "confirmed") {
+                throw new AppError("Only confirmed bookings can be cancelled", 400);
+            }
+
+            booking.status = "cancelled";
+            await booking.save({ session });
+
+            await VaccineSlotDay.updateOne(
+                { _id: booking.slotDayId, "sessions.name": booking.sessionName },
+                { $inc: { "sessions.$.booked": -1 } },
+                { session }
+            );
+
+            cancelled = booking;
+        });
+    } finally {
+        await session.endSession();
+    }
+
+    return cancelled
+        .populate([
+            { path: "hospitalId", select: "name city pincode" },
+            { path: "vaccineId",  select: "name type" },
+        ])
+        .then((b) => b.toJSON());
 }

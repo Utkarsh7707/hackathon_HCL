@@ -3,7 +3,7 @@ import { gsap } from 'gsap';
 import {
   Search, MapPin, Syringe, Sun, Sunset, CalendarDays,
   ChevronRight, X, Loader2, CheckCircle2, AlertCircle,
-  Filter, Building2, ArrowLeft, Sparkles, Clock, RefreshCw,
+  Filter, Building2, ArrowLeft, Sparkles, Clock, RefreshCw, Ban, Activity,
 } from 'lucide-react';
 import Navbar from '../components/shared/Navbar';
 import { patientApi } from '../api/patient';
@@ -148,11 +148,13 @@ function HospitalCard({ hospital, onSelect, isSelected }) {
 
 /* ── booking panel ── */
 function BookingPanel({ hospital, token, onClose, onBooked }) {
-  const [selectedDate,    setSelectedDate]    = useState(DATE_STRIP[0].iso);
+  const [selectedDate,    setSelectedDate]    = useState('');
   const [slots,           setSlots]           = useState([]);
   const [loadingSlots,    setLoadingSlots]    = useState(false);
-  const [selectedVaccine, setSelectedVaccine] = useState(hospital.availableVaccines[0]?.vaccine?.id ?? null);
+  const [selectedVaccine, setSelectedVaccine] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
+  const [dateAvailability, setDateAvailability] = useState({});
+  const [loadingDates, setLoadingDates] = useState(false);
   const [booking,         setBooking]         = useState(false);
   const [booked,          setBooked]          = useState(false);
   const [error,           setError]           = useState('');
@@ -166,6 +168,10 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
   }, []);
 
   const loadSlots = useCallback(async () => {
+    if (!selectedDate) {
+      setSlots([]);
+      return;
+    }
     setLoadingSlots(true); setSelectedSession(null); setSlots([]);
     try {
       const res = await patientApi.getSlots(hospital.id, selectedDate);
@@ -176,6 +182,51 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
   }, [hospital.id, selectedDate]);
 
   useEffect(() => { loadSlots(); }, [loadSlots]);
+
+  useEffect(() => {
+    setSelectedSession(null);
+    setError('');
+  }, [selectedVaccine]);
+
+  const loadDatesForSelectedVaccine = useCallback(async () => {
+    if (!selectedVaccine) {
+      setDateAvailability({});
+      setSelectedDate('');
+      return;
+    }
+
+    setLoadingDates(true);
+    try {
+      const results = await Promise.all(
+        DATE_STRIP.map(async ({ iso }) => {
+          const res = await patientApi.getSlots(hospital.id, iso);
+          const data = res.data ?? [];
+          const slotForVaccine = data.find((s) => {
+            const vid = s.vaccine?.id ?? s.vaccine?._id;
+            return String(vid) === String(selectedVaccine);
+          });
+
+          const remaining = slotForVaccine
+            ? slotForVaccine.sessions.reduce((sum, se) => sum + Math.max(0, se.remaining ?? 0), 0)
+            : 0;
+
+          return { iso, remaining };
+        })
+      );
+
+      const availabilityMap = results.reduce((acc, r) => ({ ...acc, [r.iso]: r.remaining }), {});
+      setDateAvailability(availabilityMap);
+
+      const firstAvailable = results.find((r) => r.remaining > 0)?.iso ?? results[0]?.iso ?? '';
+      setSelectedDate(firstAvailable);
+    } finally {
+      setLoadingDates(false);
+    }
+  }, [hospital.id, selectedVaccine]);
+
+  useEffect(() => {
+    loadDatesForSelectedVaccine();
+  }, [loadDatesForSelectedVaccine]);
 
   const activeSlot = slots.find((s) => {
     const vid = s.vaccine?.id ?? s.vaccine?._id;
@@ -238,60 +289,101 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
           </div>
         ) : (
           <>
-            {/* vaccine selector */}
-            {vaccines.length > 1 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-600">Select Vaccine</p>
-                <div className="flex flex-wrap gap-2">
-                  {vaccines.map((inv) => (
+            {/* step 1: vaccine selector */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-600">Step 1 · Select Vaccine</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {vaccines.map((inv) => {
+                  return (
                     <button
                       key={inv.id}
-                      onClick={() => { setSelectedVaccine(inv.vaccine.id); setSelectedSession(null); }}
-                      className={`text-xs px-3 py-1.5 rounded-xl font-semibold border transition-all
+                      onClick={() => setSelectedVaccine(inv.vaccine.id)}
+                      className={`text-left px-3 py-2 rounded-xl border transition-all
                         ${selectedVaccine === inv.vaccine.id
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'
+                          ? 'bg-blue-50 border-blue-500 shadow-sm'
+                          : 'bg-white border-slate-200 hover:border-blue-300'
                         }`}
                     >
-                      {inv.vaccine.name}
+                      <p className="text-sm font-semibold text-slate-700 leading-tight">{inv.vaccine.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {selectedVaccine === inv.vaccine.id
+                          ? (loadingDates ? 'Checking available dates…' : 'Selected')
+                          : 'Tap to view available dates'
+                        }
+                      </p>
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* date strip */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-600">Select Date</p>
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
-                {DATE_STRIP.map(({ iso, weekday, day, month, isToday }) => (
-                  <button
-                    key={iso}
-                    onClick={() => setSelectedDate(iso)}
-                    className={`flex flex-col items-center shrink-0 px-2.5 py-2 rounded-xl border text-xs font-semibold transition-all min-w-[48px]
-                      ${selectedDate === iso
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                        : isToday ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'
-                      }`}
-                  >
-                    <span className="text-[9px] opacity-70">{weekday}</span>
-                    <span className="text-sm font-extrabold leading-tight">{day}</span>
-                    <span className="text-[9px] opacity-70">{month}</span>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* sessions */}
+            {/* step 2: date strip */}
+            {selectedVaccine && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-600">Step 2 · Select Date</p>
+                {loadingDates ? (
+                  <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-sm">
+                    <Loader2 size={14} className="animate-spin" /> Checking available dates…
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5 overflow-x-auto pb-1">
+                    {DATE_STRIP.map(({ iso, weekday, day, month, isToday }) => {
+                      const remaining = dateAvailability[iso] ?? 0;
+                      const isUnavailable = remaining <= 0;
+                      return (
+                        <button
+                          key={iso}
+                          onClick={() => setSelectedDate(iso)}
+                          disabled={isUnavailable}
+                          className={`flex flex-col items-center shrink-0 px-2.5 py-2 rounded-xl border text-xs font-semibold transition-all min-w-[56px]
+                            ${selectedDate === iso
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                              : isUnavailable
+                                ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                                : isToday
+                                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'
+                            }`}
+                        >
+                          <span className="text-[9px] opacity-70">{weekday}</span>
+                          <span className="text-sm font-extrabold leading-tight">{day}</span>
+                          <span className="text-[9px] opacity-70">{month}</span>
+                          <span className="text-[9px] mt-0.5">{remaining > 0 ? `${remaining} left` : 'No slots'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* step 3: sessions */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-600">Choose Session</p>
-                <button onClick={loadSlots} className="text-slate-400 hover:text-blue-500 transition-colors">
+                <p className="text-xs font-semibold text-slate-600">Step 3 · Choose Session</p>
+                <button
+                  onClick={() => {
+                    loadDatesForSelectedVaccine();
+                    loadSlots();
+                  }}
+                  className="text-slate-400 hover:text-blue-500 transition-colors"
+                >
                   <RefreshCw size={12} className={loadingSlots ? 'animate-spin' : ''} />
                 </button>
               </div>
 
-              {loadingSlots ? (
+              {!selectedVaccine ? (
+                <div className="flex flex-col items-center py-8 gap-2 text-slate-400">
+                  <Syringe size={28} className="opacity-30" />
+                  <p className="text-sm font-medium">Choose a vaccine to view availability</p>
+                  <p className="text-xs">Select any vaccine above, then morning and afternoon slots will appear here.</p>
+                </div>
+              ) : !selectedDate ? (
+                <div className="flex flex-col items-center py-8 gap-2 text-slate-400">
+                  <CalendarDays size={28} className="opacity-30" />
+                  <p className="text-sm font-medium">Choose an available date first</p>
+                </div>
+              ) : loadingSlots ? (
                 <div className="flex items-center justify-center py-8 gap-2 text-slate-400 text-sm">
                   <Loader2 size={16} className="animate-spin" /> Checking availability…
                 </div>
@@ -360,6 +452,7 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
   const [toast,           setToast]          = useState(null);
   const [myBookings,      setMyBookings]     = useState([]);
   const [showBookings,    setShowBookings]   = useState(false);
+  const [cancellingId,    setCancellingId]   = useState('');
 
   const gridRef = useRef(null);
   const searchRef = useRef(null);
@@ -400,20 +493,48 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
 
   /* initial load */
   useEffect(() => { search(); }, []);
+  useEffect(() => {
+    if (!token) return;
+    loadMyBookings(false);
+  }, [token]);
 
-  const loadMyBookings = async () => {
+  const loadMyBookings = async (openPanel = true) => {
     if (!token) return;
     try {
       const res = await patientApi.myBookings(token);
       setMyBookings(res.data ?? []);
-      setShowBookings(true);
+      if (openPanel) setShowBookings(true);
     } catch { showToast('error', 'Could not load bookings.'); }
+  };
+
+  const handleCancelBooking = async (booking) => {
+    if (!booking?.id) return;
+    if (!window.confirm('Cancel this booking?')) return;
+
+    setCancellingId(booking.id);
+    try {
+      const res = await patientApi.cancelBooking(token, booking.id);
+      setMyBookings((prev) => prev.map((b) => (b.id === booking.id ? { ...b, ...res.data } : b)));
+      showToast('success', 'Booking cancelled successfully.');
+    } catch (err) {
+      showToast('error', err?.message ?? 'Could not cancel booking.');
+    } finally {
+      setCancellingId('');
+    }
   };
 
   const handleBooked = (booking) => {
     setMyBookings((prev) => [booking, ...prev]);
     setSelectedHospital(null);
     showToast('success', 'Slot booked! Check "My Bookings" to see your appointment.');
+  };
+
+  const todayIso = new Date().toISOString().split('T')[0];
+  const bookingStats = {
+    total: myBookings.length,
+    active: myBookings.filter((b) => b.status === 'confirmed').length,
+    upcoming: myBookings.filter((b) => b.status === 'confirmed' && b.date >= todayIso).length,
+    cancelled: myBookings.filter((b) => b.status === 'cancelled').length,
   };
 
   return (
@@ -470,11 +591,29 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
             {fetched ? `${hospitals.length} hospital${hospitals.length !== 1 ? 's' : ''} found` : ''}
           </p>
           <button
-            onClick={showBookings ? () => setShowBookings(false) : loadMyBookings}
+            onClick={showBookings ? () => setShowBookings(false) : () => loadMyBookings(true)}
             className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-xl border border-blue-100 transition-all"
           >
             <CalendarDays size={13} /> My Bookings {myBookings.length > 0 && `(${myBookings.length})`}
           </button>
+        </div>
+
+        {/* booking stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Bookings', value: bookingStats.total,    color: 'bg-blue-50 text-blue-700 border-blue-200', icon: CalendarDays },
+            { label: 'Active',         value: bookingStats.active,   color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Activity },
+            { label: 'Upcoming',       value: bookingStats.upcoming, color: 'bg-violet-50 text-violet-700 border-violet-200', icon: Clock },
+            { label: 'Cancelled',      value: bookingStats.cancelled,color: 'bg-red-50 text-red-700 border-red-200', icon: Ban },
+          ].map((s) => (
+            <div key={s.label} className={`rounded-2xl border px-4 py-3 ${s.color}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold opacity-80">{s.label}</p>
+                <s.icon size={14} />
+              </div>
+              <p className="text-2xl font-extrabold mt-1">{s.value}</p>
+            </div>
+          ))}
         </div>
 
         {/* my bookings drawer */}
@@ -482,27 +621,48 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
               <p className="font-bold text-slate-800 text-sm">My Bookings</p>
-              <button onClick={() => setShowBookings(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => loadMyBookings(true)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
+                  <RefreshCw size={13} />
+                </button>
+                <button onClick={() => setShowBookings(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
+                  <X size={14} />
+                </button>
+              </div>
             </div>
             {myBookings.length === 0 ? (
               <div className="py-10 text-center text-slate-400 text-sm">No bookings yet.</div>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {myBookings.map((b) => (
-                  <li key={b.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+                  <li key={b.id} className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 hover:bg-slate-50 transition-colors">
                     <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
                       <Syringe size={14} className="text-emerald-600" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-700 truncate">{b.vaccineId?.name ?? '—'}</p>
-                      <p className="text-xs text-slate-400">{b.hospitalId?.name} · {b.sessionName} · {b.date}</p>
+                      <p className="text-xs text-slate-400">{b.hospitalId?.name} · {b.sessionName} · {b.date} · ₹{Number(b.priceAtBooking ?? 0).toLocaleString()}</p>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize
-                      ${b.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                      {b.status}
-                    </span>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize
+                        ${b.status === 'confirmed'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : b.status === 'cancelled'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-slate-50 text-slate-500 border-slate-200'
+                        }`}>
+                        {b.status}
+                      </span>
+                      {b.status === 'confirmed' && b.date >= todayIso && (
+                        <button
+                          onClick={() => handleCancelBooking(b)}
+                          disabled={cancellingId === b.id}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                        >
+                          {cancellingId === b.id ? 'Cancelling…' : 'Cancel'}
+                        </button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -510,10 +670,8 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
           </div>
         )}
 
-        {/* main content — hospital grid + booking panel */}
-        <div className={`grid gap-6 ${selectedHospital ? 'lg:grid-cols-[1fr_420px]' : 'grid-cols-1'}`}>
-
-          {/* hospital grid */}
+        {/* main content */}
+        {!selectedHospital ? (
           <div className="space-y-4">
             {loading && !fetched && (
               <div className="flex items-center justify-center py-16 gap-2 text-slate-400 text-sm">
@@ -530,42 +688,35 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
             )}
 
             {hospitals.length > 0 && (
-              <>
-                {selectedHospital && (
-                  <button
-                    onClick={() => setSelectedHospital(null)}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors"
-                  >
-                    <ArrowLeft size={12} /> Back to all hospitals
-                  </button>
-                )}
-                <div ref={gridRef} className={`grid gap-4 ${selectedHospital ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
-                  {(selectedHospital ? hospitals.filter((h) => h.id === selectedHospital.id) : hospitals).map((h) => (
-                    <div key={h.id} data-card>
-                      <HospitalCard
-                        hospital={h}
-                        onSelect={setSelectedHospital}
-                        isSelected={selectedHospital?.id === h.id}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </>
+              <div ref={gridRef} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {hospitals.map((h) => (
+                  <div key={h.id} data-card>
+                    <HospitalCard
+                      hospital={h}
+                      onSelect={setSelectedHospital}
+                      isSelected={false}
+                    />
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-
-          {/* booking panel */}
-          {selectedHospital && (
-            <div className="lg:sticky lg:top-24 lg:self-start">
-              <BookingPanel
-                hospital={selectedHospital}
-                token={token}
-                onClose={() => setSelectedHospital(null)}
-                onBooked={handleBooked}
-              />
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="space-y-4">
+            <button
+              onClick={() => setSelectedHospital(null)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors"
+            >
+              <ArrowLeft size={12} /> Back to all hospitals
+            </button>
+            <BookingPanel
+              hospital={selectedHospital}
+              token={token}
+              onClose={() => setSelectedHospital(null)}
+              onBooked={handleBooked}
+            />
+          </div>
+        )}
       </main>
     </div>
   );
