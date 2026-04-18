@@ -108,14 +108,18 @@ function SessionCard({ session, selected, onSelect, disabled }) {
 
 /* ── hospital card ── */
 function HospitalCard({ hospital, onSelect, isSelected }) {
+  const minPrice = hospital.availableVaccines.length
+    ? Math.min(...hospital.availableVaccines.map((v) => Number(v.pricePerDose ?? 0)))
+    : 0;
+
   return (
     <div
       onClick={() => onSelect(hospital)}
-      className={`bg-white rounded-2xl border-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer p-5 space-y-4
+      className={`bg-white rounded-2xl border-2 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer p-5 space-y-4
         ${isSelected ? 'border-blue-500' : 'border-slate-200 hover:border-blue-200'}`}
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shrink-0">
           <Building2 size={18} className="text-blue-600" />
         </div>
         <div className="flex-1 min-w-0">
@@ -137,9 +141,12 @@ function HospitalCard({ hospital, onSelect, isSelected }) {
       </div>
 
       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-        <span className="text-xs text-slate-500">{hospital.availableVaccines.length} vaccine{hospital.availableVaccines.length !== 1 ? 's' : ''} available</span>
+        <div className="space-y-0.5">
+          <span className="block text-xs text-slate-500">{hospital.availableVaccines.length} vaccine{hospital.availableVaccines.length !== 1 ? 's' : ''} available</span>
+          <span className="block text-xs font-semibold text-slate-700">From ₹{minPrice.toLocaleString()} / dose</span>
+        </div>
         <span className="text-xs font-semibold text-blue-600 flex items-center gap-1">
-          Book <ChevronRight size={11} />
+          Explore <ChevronRight size={11} />
         </span>
       </div>
     </div>
@@ -262,12 +269,12 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
   const vaccines = hospital.availableVaccines;
 
   return (
-    <div ref={panelRef} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+    <div ref={panelRef} className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col h-full">
       {/* header */}
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-gradient-to-r from-blue-50 to-white">
         <div className="min-w-0">
           <p className="font-bold text-slate-800 text-sm truncate">{hospital.name}</p>
-          <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><MapPin size={9} />{hospital.city}</p>
+          <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><MapPin size={9} />{hospital.city}</p>
         </div>
         <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0">
           <X size={15} />
@@ -290,7 +297,7 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
         ) : (
           <>
             {/* step 1: vaccine selector */}
-            <div className="space-y-2">
+            <div className="space-y-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
               <p className="text-xs font-semibold text-slate-600">Step 1 · Select Vaccine</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {vaccines.map((inv) => {
@@ -298,7 +305,7 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
                     <button
                       key={inv.id}
                       onClick={() => setSelectedVaccine(inv.vaccine.id)}
-                      className={`text-left px-3 py-2 rounded-xl border transition-all
+                      className={`text-left px-3 py-2.5 rounded-xl border transition-all
                         ${selectedVaccine === inv.vaccine.id
                           ? 'bg-blue-50 border-blue-500 shadow-sm'
                           : 'bg-white border-slate-200 hover:border-blue-300'
@@ -319,7 +326,7 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
 
             {/* step 2: date strip */}
             {selectedVaccine && (
-              <div className="space-y-2">
+              <div className="space-y-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
                 <p className="text-xs font-semibold text-slate-600">Step 2 · Select Date</p>
                 {loadingDates ? (
                   <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-sm">
@@ -335,7 +342,7 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
                           key={iso}
                           onClick={() => setSelectedDate(iso)}
                           disabled={isUnavailable}
-                          className={`flex flex-col items-center shrink-0 px-2.5 py-2 rounded-xl border text-xs font-semibold transition-all min-w-[56px]
+                          className={`flex flex-col items-center shrink-0 px-2.5 py-2 rounded-xl border text-xs font-semibold transition-all min-w-[64px]
                             ${selectedDate === iso
                               ? 'bg-blue-600 border-blue-600 text-white shadow-md'
                               : isUnavailable
@@ -358,7 +365,7 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
             )}
 
             {/* step 3: sessions */}
-            <div className="space-y-2">
+            <div className="space-y-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-600">Step 3 · Choose Session</p>
                 <button
@@ -394,7 +401,7 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
                   <p className="text-xs">The hospital hasn't configured slots for {selectedDate} yet.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {activeSlot.sessions.map((s) => (
                     <SessionCard
                       key={s.name}
@@ -410,9 +417,9 @@ function BookingPanel({ hospital, token, onClose, onBooked }) {
 
             {/* price */}
             {activeSlot && selectedSession && (
-              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                <span className="text-sm text-slate-600 font-medium">Price for {selectedDate}</span>
-                <span className="text-lg font-extrabold text-slate-800">₹{activeSlot.priceAtDate?.toLocaleString()}</span>
+              <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl px-4 py-3">
+                <span className="text-sm text-slate-700 font-semibold">Price for {selectedDate}</span>
+                <span className="text-lg font-extrabold text-blue-800">₹{activeSlot.priceAtDate?.toLocaleString()}</span>
               </div>
             )}
 
@@ -545,11 +552,13 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
         {/* hero search bar */}
-        <div ref={searchRef} className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 sm:p-8 space-y-4 relative overflow-hidden">
-          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5" />
+        <div ref={searchRef} className="bg-gradient-to-br from-blue-600 via-indigo-700 to-cyan-700 rounded-3xl p-6 sm:p-8 space-y-4 relative overflow-hidden shadow-xl">
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10" />
+          <div className="absolute -bottom-14 -left-8 w-40 h-40 rounded-full bg-white/10" />
           <div className="relative z-10">
             <p className="text-blue-200 text-sm font-medium flex items-center gap-1.5 mb-1"><Sparkles size={13} /> Find vaccines near you</p>
-            <h1 className="text-2xl font-extrabold text-white">Search Hospitals</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Search Hospitals</h1>
+            <p className="text-xs text-blue-100 mt-1">Pick a hospital, choose vaccine, then book the best available slot.</p>
           </div>
           <div className="relative z-10 flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -586,7 +595,7 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
         </div>
 
         {/* my bookings bar */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm">
           <p className="text-xs text-slate-500">
             {fetched ? `${hospitals.length} hospital${hospitals.length !== 1 ? 's' : ''} found` : ''}
           </p>
@@ -606,7 +615,7 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
             { label: 'Upcoming',       value: bookingStats.upcoming, color: 'bg-violet-50 text-violet-700 border-violet-200', icon: Clock },
             { label: 'Cancelled',      value: bookingStats.cancelled,color: 'bg-red-50 text-red-700 border-red-200', icon: Ban },
           ].map((s) => (
-            <div key={s.label} className={`rounded-2xl border px-4 py-3 ${s.color}`}>
+            <div key={s.label} className={`rounded-2xl border px-4 py-3 shadow-sm ${s.color}`}>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold opacity-80">{s.label}</p>
                 <s.icon size={14} />
@@ -673,6 +682,10 @@ export default function PatientBookingDashboard({ user, token, onLogout }) {
         {/* main content */}
         {!selectedHospital ? (
           <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-700">Available Hospitals</h2>
+              {!!hospitals.length && <p className="text-xs text-slate-400">Tap a card to open booking flow</p>}
+            </div>
             {loading && !fetched && (
               <div className="flex items-center justify-center py-16 gap-2 text-slate-400 text-sm">
                 <Loader2 size={18} className="animate-spin" /> Searching hospitals…
