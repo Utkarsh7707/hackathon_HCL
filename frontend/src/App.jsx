@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import AuthPage from './pages/AuthPage';
-import PatientDashboard from './pages/PatientDashboard';
+import PatientBookingDashboard from './pages/PatientBookingDashboard';
 import HospitalAdminDashboard from './pages/HospitalAdminDashboard';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import DocumentUploadPage from './pages/DocumentUploadPage';
+import { hospitalAdminApi } from './api/hospitalAdmin';
 
 const AUTH_KEY = 'vaxbook_auth';
 
@@ -19,15 +20,27 @@ export default function App() {
     else localStorage.removeItem(AUTH_KEY);
   }, [auth]);
 
-  const handleAuthSuccess = (data) => setAuth(data);
-  const handleLogout = () => setAuth(null);
+  const handleAuthSuccess  = (data) => setAuth(data);
+  const handleLogout       = () => setAuth(null);
 
-  // after document upload succeeds, update verification state in auth
   const handleUploadSuccess = (verificationData) => {
-    setAuth((prev) => ({
-      ...prev,
-      verification: { ...prev.verification, ...verificationData },
-    }));
+    setAuth((prev) => ({ ...prev, verification: { ...prev.verification, ...verificationData } }));
+  };
+
+  // called by the "Check Status" button on the waiting screen —
+  // re-fetches live verification state and patches auth without a full re-login
+  const handleRefreshStatus = async () => {
+    if (!auth?.token) return;
+    try {
+      const res = await hospitalAdminApi.getMyStatus(auth.token);
+      setAuth((prev) => ({
+        ...prev,
+        hospital:     res.data.hospital,
+        verification: res.data.verification,
+      }));
+    } catch {
+      // silently ignore — user can logout and re-login if needed
+    }
   };
 
   if (!auth) {
@@ -41,12 +54,20 @@ export default function App() {
   }
 
   if (user?.role === 'hospital_admin') {
-    // route to document upload if docs haven't been submitted yet
     if (!verification?.documentsSubmitted) {
       return <DocumentUploadPage auth={auth} onUploadSuccess={handleUploadSuccess} />;
     }
-    return <HospitalAdminDashboard user={user} hospital={hospital} verification={verification} onLogout={handleLogout} />;
+    return (
+      <HospitalAdminDashboard
+        user={user}
+        hospital={hospital}
+        verification={verification}
+        token={auth.token}
+        onLogout={handleLogout}
+        onRefresh={handleRefreshStatus}
+      />
+    );
   }
 
-  return <PatientDashboard user={user} onLogout={handleLogout} />;
+  return <PatientBookingDashboard user={user} token={auth.token} onLogout={handleLogout} />;
 }

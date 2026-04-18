@@ -20,4 +20,18 @@ export const hospitalAdminApi = {
       if (!res.ok) throw data;
       return data;
     }),
+
+  getBookings: (token, params = {}) => {
+    const query = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''))
+    );
+
+    return fetch(`${BASE_URL}/hospital-admin/bookings?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(async (res) => {
+      const data = await res.json();
+      if (!res.ok) throw data;
+      return data;
+    });
+  },
 };

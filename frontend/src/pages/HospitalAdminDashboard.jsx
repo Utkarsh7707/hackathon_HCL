@@ -2,23 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import {
   Clock, CheckCircle2, XCircle, AlertTriangle,
-  Syringe, Users, Sun, Sunset, PackageCheck,
-  TrendingUp, ChevronRight, PlusCircle, BarChart3,
+  Users, Sun, Sunset, PackageCheck, BarChart3,
+  LogOut, RefreshCw, LayoutDashboard, Syringe, CalendarDays,
 } from 'lucide-react';
 import Navbar from '../components/shared/Navbar';
 import StatCard from '../components/shared/StatCard';
-
-/* ─── mock vaccine inventory ─── */
-const MOCK_VACCINES = [
-  { name: 'COVID-19 (Covishield)', doses: 120, used: 87,  price: 850  },
-  { name: 'Influenza (Fluzone)',   doses: 80,  used: 34,  price: 600  },
-  { name: 'Hepatitis B',           doses: 60,  used: 60,  price: 450  },
-  { name: 'Typhoid (Typbar)',      doses: 100, used: 12,  price: 350  },
-  { name: 'HPV (Gardasil)',        doses: 40,  used: 18,  price: 1800 },
-];
+import InventoryTab from '../components/hospital-admin/InventoryTab';
+import AvailabilityTab from '../components/hospital-admin/AvailabilityTab';
+import BookingsTab from '../components/hospital-admin/BookingsTab';
 
 /* ─── docs not yet uploaded ─── */
-function DocsPendingState({ hospitalName }) {
+function DocsPendingState({ hospitalName, onLogout }) {
   const cardRef = useRef(null);
   useEffect(() => {
     gsap.fromTo(cardRef.current,
@@ -39,16 +33,20 @@ function DocsPendingState({ hospitalName }) {
             <span className="font-semibold text-slate-700">{hospitalName}</span> is registered. Upload your verification documents to proceed.
           </p>
         </div>
-        <p className="text-xs text-slate-400 bg-slate-50 rounded-xl p-3">
-          You'll be redirected to the document upload page automatically on next login.
-        </p>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-red-500 hover:border-red-100 transition-all"
+        >
+          <LogOut size={14} /> Logout
+        </button>
       </div>
     </div>
   );
 }
 
 /* ─── pending / rejected states ─── */
-function PendingState({ hospitalName }) {
+function PendingState({ hospitalName, onLogout, onRefresh }) {
+  const [checking, setChecking] = useState(false);
   const cardRef = useRef(null);
   useEffect(() => {
     gsap.fromTo(cardRef.current,
@@ -56,6 +54,12 @@ function PendingState({ hospitalName }) {
       { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' }
     );
   }, []);
+
+  const handleRefresh = async () => {
+    setChecking(true);
+    await onRefresh?.();
+    setChecking(false);
+  };
 
   const steps = [
     { label: 'Application Submitted',      done: true  },
@@ -106,8 +110,25 @@ function PendingState({ hospitalName }) {
         </ol>
 
         <p className="text-xs text-center text-slate-400 bg-slate-50 rounded-xl p-3">
-          You'll receive an email notification once a decision is made.
+          Log out and back in after approval to access your full dashboard.
         </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={checking}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-all disabled:opacity-60"
+          >
+            <RefreshCw size={13} className={checking ? 'animate-spin' : ''} />
+            {checking ? 'Checking…' : 'Check Status'}
+          </button>
+          <button
+            onClick={onLogout}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-red-500 hover:border-red-100 transition-all"
+          >
+            <LogOut size={13} /> Logout
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -160,9 +181,18 @@ function RejectedState({ hospitalName, reviewNotes, onLogout }) {
   );
 }
 
+const TABS = [
+  { id: 'overview',     label: 'Overview',     icon: LayoutDashboard },
+  { id: 'inventory',    label: 'Inventory',    icon: Syringe         },
+  { id: 'availability', label: 'Availability', icon: CalendarDays    },
+  { id: 'bookings',     label: 'Bookings',     icon: Users           },
+];
+
 /* ─── approved full dashboard ─── */
-function ApprovedDashboard({ user, hospital, onLogout }) {
-  const mainRef = useRef(null);
+function ApprovedDashboard({ user, hospital, token, onLogout }) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const mainRef  = useRef(null);
+  const tabRef   = useRef(null);
 
   useEffect(() => {
     gsap.fromTo(mainRef.current?.querySelectorAll('[data-animate]'),
@@ -171,19 +201,19 @@ function ApprovedDashboard({ user, hospital, onLogout }) {
     );
   }, []);
 
-  const sessionData = {
-    morning:   { booked: 38, total: 50 },
-    afternoon: { booked: 9,  total: 12 },
-  };
-
-  const morningPct   = Math.round((sessionData.morning.booked   / sessionData.morning.total)   * 100);
-  const afternoonPct = Math.round((sessionData.afternoon.booked / sessionData.afternoon.total) * 100);
+  useEffect(() => {
+    if (!tabRef.current) return;
+    gsap.fromTo(tabRef.current,
+      { opacity: 0, y: 10 },
+      { opacity: 1, y: 0, duration: 0.28, ease: 'power2.out' }
+    );
+  }, [activeTab]);
 
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar user={user} pageTitle="Hospital Dashboard" onLogout={onLogout} />
 
-      <main ref={mainRef} className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <main ref={mainRef} className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
         {/* hospital identity bar */}
         <div data-animate className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-4">
@@ -197,110 +227,49 @@ function ApprovedDashboard({ user, hospital, onLogout }) {
             <p className="text-xs text-slate-500 mt-0.5">{hospital?.city} · {hospital?.pincode} · Reg: {hospital?.registrationNumber}</p>
           </div>
           <button className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl border border-blue-100 transition-all shrink-0">
-            <BarChart3 size={13} /> View Analytics
+            <BarChart3 size={13} /> Analytics
           </button>
         </div>
 
-        {/* stats */}
+        {/* stats row */}
         <div data-animate className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Today's Bookings"    value="47"  icon={Users}       color="blue"    delay={0}    trend="up" trendLabel="+12%" />
-          <StatCard label="Morning Slots Left"  value={sessionData.morning.total - sessionData.morning.booked}    icon={Sun}        color="amber"   delay={0.06} />
-          <StatCard label="Afternoon Slots Left"value={sessionData.afternoon.total - sessionData.afternoon.booked} icon={Sunset}     color="violet"  delay={0.12} />
-          <StatCard label="Vaccines in Stock"   value="4"   icon={PackageCheck} color="emerald" delay={0.18} />
+          <StatCard label="Today's Bookings"     value="—"  icon={Users}       color="blue"    delay={0} />
+          <StatCard label="Morning Slots"        value="—"  icon={Sun}         color="amber"   delay={0.06} />
+          <StatCard label="Afternoon Slots"      value="—"  icon={Sunset}      color="violet"  delay={0.12} />
+          <StatCard label="Vaccines in Inventory"value="—"  icon={PackageCheck} color="emerald" delay={0.18} />
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-
-          {/* today's sessions */}
-          <div data-animate className="lg:col-span-1 space-y-4">
-            <h2 className="font-bold text-slate-800 text-sm">Today's Sessions</h2>
-
-            {[
-              { label: "Morning", icon: Sun, time: "09:00 – 13:00", booked: sessionData.morning.booked,   total: sessionData.morning.total,   pct: morningPct,   color: "amber"  },
-              { label: "Afternoon", icon: Sunset, time: "14:00 – 18:00", booked: sessionData.afternoon.booked, total: sessionData.afternoon.total, pct: afternoonPct, color: "violet" },
-            ].map((s) => {
-              const isFull = s.booked >= s.total;
-              const barColor = isFull ? 'bg-red-500' : s.pct >= 80 ? 'bg-amber-500' : 'bg-blue-500';
-              return (
-                <div key={s.label} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-lg bg-${s.color}-100`}>
-                        <s.icon size={14} className={`text-${s.color}-600`} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{s.label}</p>
-                        <p className="text-xs text-slate-400">{s.time}</p>
-                      </div>
-                    </div>
-                    {isFull && (
-                      <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">FULL</span>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-xs text-slate-500 mb-1.5">
-                      <span>{s.booked} booked</span>
-                      <span>{s.total - s.booked} left</span>
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${s.pct}%` }} />
-                    </div>
-                    <p className="text-right text-xs text-slate-400 mt-1">{s.pct}% capacity</p>
-                  </div>
-                </div>
-              );
-            })}
-
-            <button className="w-full flex items-center justify-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-2xl py-3 transition-all">
-              <PlusCircle size={13} /> Manage Slot Capacity
-            </button>
+        {/* tab bar */}
+        <div data-animate className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex border-b border-slate-100">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 -mb-px
+                  ${activeTab === id
+                    ? 'border-blue-600 text-blue-700 bg-blue-50/40'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                  }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
           </div>
 
-          {/* vaccine inventory */}
-          <div data-animate className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="font-bold text-slate-800 text-sm">Vaccine Inventory</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Stock levels as of today</p>
+          <div ref={tabRef} className="p-6">
+            {activeTab === 'overview' && (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-500 text-center py-8">
+                  Overview analytics will populate once bookings start coming in.<br />
+                  Use the <span className="font-semibold text-slate-700">Inventory</span>, <span className="font-semibold text-slate-700">Availability</span>, and <span className="font-semibold text-slate-700">Bookings</span> tabs to manage operations.
+                </p>
               </div>
-              <button className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline">
-                Manage <ChevronRight size={12} />
-              </button>
-            </div>
-            <ul className="divide-y divide-slate-100">
-              {MOCK_VACCINES.map((v) => {
-                const pct = Math.round((v.used / v.doses) * 100);
-                const remaining = v.doses - v.used;
-                const isLow = remaining <= 10;
-                return (
-                  <li key={v.name} className="px-6 py-3.5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
-                    <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                      <Syringe size={13} className="text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-slate-700 truncate">{v.name}</p>
-                        {isLow && (
-                          <span className="text-xs font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
-                            <AlertTriangle size={9} /> Low stock
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${pct >= 90 ? 'bg-red-500' : pct >= 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-slate-500 shrink-0">{remaining} left / {v.doses}</span>
-                      </div>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-600 shrink-0">₹{v.price.toLocaleString()}</span>
-                  </li>
-                );
-              })}
-            </ul>
+            )}
+            {activeTab === 'inventory'    && <InventoryTab    token={token} />}
+            {activeTab === 'availability' && <AvailabilityTab token={token} />}
+            {activeTab === 'bookings'     && <BookingsTab     token={token} />}
           </div>
         </div>
       </main>
@@ -309,14 +278,14 @@ function ApprovedDashboard({ user, hospital, onLogout }) {
 }
 
 /* ─── main export ─── */
-export default function HospitalAdminDashboard({ user, hospital, verification, onLogout }) {
-  const hospitalName = hospital?.name ?? 'Your Hospital';
-  const reviewNotes  = verification?.reviewNotes ?? '';
-  const status       = verification?.status ?? hospital?.onboardingStatus ?? 'pending';
+export default function HospitalAdminDashboard({ user, hospital, verification, token, onLogout, onRefresh }) {
+  const hospitalName  = hospital?.name ?? 'Your Hospital';
+  const reviewNotes   = verification?.reviewNotes ?? '';
+  const status        = verification?.status ?? hospital?.onboardingStatus ?? 'pending';
   const docsSubmitted = verification?.documentsSubmitted ?? false;
 
-  if (!docsSubmitted)       return <DocsPendingState hospitalName={hospitalName} />;
-  if (status === 'rejected') return <RejectedState hospitalName={hospitalName} reviewNotes={reviewNotes} onLogout={onLogout} />;
-  if (status !== 'approved') return <PendingState   hospitalName={hospitalName} />;
-  return <ApprovedDashboard user={user} hospital={hospital} onLogout={onLogout} />;
+  if (!docsSubmitted)        return <DocsPendingState hospitalName={hospitalName} onLogout={onLogout} />;
+  if (status === 'rejected') return <RejectedState    hospitalName={hospitalName} reviewNotes={reviewNotes} onLogout={onLogout} />;
+  if (status !== 'approved') return <PendingState     hospitalName={hospitalName} onLogout={onLogout} onRefresh={onRefresh} />;
+  return <ApprovedDashboard user={user} hospital={hospital} token={token} onLogout={onLogout} />;
 }
