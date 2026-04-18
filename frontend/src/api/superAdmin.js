@@ -14,6 +14,9 @@ export const superAdminApi = {
   getVerifications: (token, status = 'pending') =>
     authFetch(token, `/super-admin/verifications?status=${status}`),
 
+  getVaccineCoverage: (token) =>
+    authFetch(token, '/super-admin/vaccines-coverage'),
+
   decide: (token, verificationId, decision, notes = '') =>
     authFetch(token, `/super-admin/verifications/${verificationId}/decision`, {
       method: 'PATCH',

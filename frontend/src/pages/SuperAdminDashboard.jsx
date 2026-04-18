@@ -4,7 +4,7 @@ import {
   ClipboardList, CheckCircle2, XCircle, Building2,
   Search, MapPin, Hash, CalendarDays, Eye,
   ShieldCheck, Loader2, RefreshCw, FileImage,
-  AlertCircle, X, ChevronDown,
+  AlertCircle, X, Syringe,
 } from 'lucide-react';
 import Navbar from '../components/shared/Navbar';
 import StatCard from '../components/shared/StatCard';
@@ -175,9 +175,11 @@ function ConfirmModal({ action, hospital, notes, onNotesChange, onConfirm, onCan
 /* ─── main dashboard ─── */
 export default function SuperAdminDashboard({ auth, user, onLogout }) {
   const [applications, setApplications] = useState([]);
+  const [vaccineCoverage, setVaccineCoverage] = useState([]);
   const [fetching, setFetching]         = useState(true);
   const [fetchError, setFetchError]     = useState(null);
   const [search, setSearch]             = useState('');
+  const [vaccineSearch, setVaccineSearch] = useState('');
   const [filter, setFilter]             = useState('pending');
   const [viewDoc, setViewDoc]           = useState(null);
   const [confirm, setConfirm]           = useState(null); // { action, id, hospitalName }
@@ -191,8 +193,12 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
     setFetching(true);
     setFetchError(null);
     try {
-      const res = await superAdminApi.getVerifications(token, 'all');
-      setApplications(res.data ?? []);
+      const [verRes, covRes] = await Promise.all([
+        superAdminApi.getVerifications(token, 'all'),
+        superAdminApi.getVaccineCoverage(token),
+      ]);
+      setApplications(verRes.data ?? []);
+      setVaccineCoverage(covRes.data ?? []);
     } catch (err) {
       setFetchError(err?.message ?? 'Failed to load applications');
     } finally {
@@ -228,6 +234,19 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
       a.hospitalRegistrationNumber?.toLowerCase().includes(q) ||
       a.admin?.name?.toLowerCase().includes(q);
     return matchesFilter && matchesSearch;
+  });
+
+  const visibleVaccines = vaccineCoverage.filter((v) => {
+    const q = vaccineSearch.toLowerCase();
+    if (!q) return true;
+    const matchesVaccine =
+      v.name?.toLowerCase().includes(q) ||
+      v.type?.toLowerCase().includes(q) ||
+      v.manufacturer?.toLowerCase().includes(q);
+    const matchesProvider = (v.providers ?? []).some((p) =>
+      p.hospitalName?.toLowerCase().includes(q) || p.city?.toLowerCase().includes(q)
+    );
+    return matchesVaccine || matchesProvider;
   });
 
   const handleDecide = async () => {
@@ -410,6 +429,74 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+
+        {/* vaccines coverage panel */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1">
+              <h2 className="font-bold text-slate-800 text-sm">Vaccine Coverage by Hospitals</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{visibleVaccines.length} vaccines in catalog</p>
+            </div>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={vaccineSearch}
+                onChange={(e) => setVaccineSearch(e.target.value)}
+                placeholder="Search vaccine, manufacturer, hospital…"
+                className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-slate-50"
+              />
+            </div>
+          </div>
+
+          {fetching ? (
+            <div className="flex items-center justify-center py-14 gap-2 text-slate-400 text-sm">
+              <Loader2 size={16} className="animate-spin" /> Loading vaccine coverage…
+            </div>
+          ) : visibleVaccines.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-14 text-slate-400 gap-2">
+              <Syringe size={28} className="opacity-40" />
+              <p className="text-sm font-medium">No vaccines found</p>
+            </div>
+          ) : (
+            <div className="p-4 sm:p-6 space-y-3">
+              {visibleVaccines.map((v) => (
+                <div key={v.id} className="rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{v.name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{v.type} · {v.manufacturer || 'Unknown manufacturer'}</p>
+                    </div>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      {v.providersCount} hospital{v.providersCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {(v.providers ?? []).length === 0 ? (
+                    <div className="px-4 py-3 text-xs text-slate-400">No hospital is currently providing this vaccine.</div>
+                  ) : (
+                    <ul className="divide-y divide-slate-100">
+                      {v.providers.map((p) => (
+                        <li key={`${v.id}-${p.hospitalId}`} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-700 truncate">{p.hospitalName}</p>
+                            <p className="text-xs text-slate-500">{p.city}, {p.pincode}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">₹{Number(p.pricePerDose ?? 0).toLocaleString()} / dose</span>
+                            <span className="px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">{p.availableStock} available</span>
+                            <span className={`px-2 py-0.5 rounded-full border ${p.isLive ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                              {p.isLive ? 'Live' : 'Not Live'}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </main>
