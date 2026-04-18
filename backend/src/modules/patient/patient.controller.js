@@ -1,4 +1,4 @@
-import { searchHospitals, getHospitalSlots, createBooking, getMyBookings } from "./patient.service.js";
+import { searchHospitals, getHospitalSlots, createBooking, getMyBookings, cancelMyBooking } from "./patient.service.js";
 import { AppError } from "../../utils/appError.js";
 
 export async function listHospitals(req, res) {
@@ -26,4 +26,9 @@ export async function bookSlot(req, res) {
 export async function myBookings(req, res) {
     const data = await getMyBookings(req.user.id);
     return res.status(200).json({ success: true, data });
+}
+
+export async function cancelBooking(req, res) {
+    const data = await cancelMyBooking(req.user.id, req.params.bookingId);
+    return res.status(200).json({ success: true, message: "Booking cancelled successfully", data });
 }
