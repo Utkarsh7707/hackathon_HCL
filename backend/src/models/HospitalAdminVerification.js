@@ -22,15 +22,21 @@ const hospitalAdminVerificationSchema = new Schema(
             required: true,
             trim: true,
         },
+        /* populated after the admin uploads documents */
         adminIdProofUrl: {
             type: String,
-            required: true,
             trim: true,
+            default: "",
         },
         registrationCertificateUrl: {
             type: String,
-            required: true,
             trim: true,
+            default: "",
+        },
+        documentsSubmitted: {
+            type: Boolean,
+            default: false,
+            index: true,
         },
         status: {
             type: String,

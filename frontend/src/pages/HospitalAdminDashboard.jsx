@@ -17,6 +17,36 @@ const MOCK_VACCINES = [
   { name: 'HPV (Gardasil)',        doses: 40,  used: 18,  price: 1800 },
 ];
 
+/* ─── docs not yet uploaded ─── */
+function DocsPendingState({ hospitalName }) {
+  const cardRef = useRef(null);
+  useEffect(() => {
+    gsap.fromTo(cardRef.current,
+      { y: 30, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' }
+    );
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+      <div ref={cardRef} className="bg-white rounded-2xl border border-blue-200 shadow-sm max-w-sm w-full p-8 space-y-5 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mx-auto">
+          <Syringe size={28} className="text-blue-600" />
+        </div>
+        <div>
+          <h2 className="font-extrabold text-slate-800 text-lg">Complete Your Profile</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            <span className="font-semibold text-slate-700">{hospitalName}</span> is registered. Upload your verification documents to proceed.
+          </p>
+        </div>
+        <p className="text-xs text-slate-400 bg-slate-50 rounded-xl p-3">
+          You'll be redirected to the document upload page automatically on next login.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ─── pending / rejected states ─── */
 function PendingState({ hospitalName }) {
   const cardRef = useRef(null);
@@ -83,7 +113,7 @@ function PendingState({ hospitalName }) {
   );
 }
 
-function RejectedState({ hospitalName, onLogout }) {
+function RejectedState({ hospitalName, reviewNotes, onLogout }) {
   const cardRef = useRef(null);
   useEffect(() => {
     gsap.fromTo(cardRef.current,
@@ -100,20 +130,25 @@ function RejectedState({ hospitalName, onLogout }) {
             <XCircle size={32} className="text-red-600" />
           </div>
           <div className="text-center">
-            <h2 className="font-extrabold text-slate-800 text-lg">Application Rejected</h2>
+            <h2 className="font-extrabold text-slate-800 text-lg">Verification Failed</h2>
             <p className="text-sm text-slate-500 mt-1">
-              Unfortunately, <span className="font-semibold text-slate-700">{hospitalName}</span>'s application could not be approved at this time.
+              <span className="font-semibold text-slate-700">{hospitalName}</span>'s application was not approved.
             </p>
           </div>
         </div>
         <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-          <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5 mb-1">
+          <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5 mb-2">
             <AlertTriangle size={12} /> Reason from Super Admin
           </p>
-          <p className="text-sm text-red-600">
-            Submitted documents could not be verified against the government registry. Please ensure the registration certificate matches the national database.
+          <p className="text-sm text-red-600 leading-relaxed">
+            {reviewNotes?.trim()
+              ? reviewNotes
+              : 'Your application did not meet the verification requirements. Please contact support for more information.'}
           </p>
         </div>
+        <p className="text-xs text-center text-slate-400 bg-slate-50 rounded-xl p-3">
+          If you believe this is an error, contact <span className="font-semibold text-slate-600">support@vaxbook.in</span>
+        </p>
         <button
           onClick={onLogout}
           className="w-full py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
@@ -274,11 +309,14 @@ function ApprovedDashboard({ user, hospital, onLogout }) {
 }
 
 /* ─── main export ─── */
-export default function HospitalAdminDashboard({ user, hospital, onboarding, onLogout }) {
-  const status = onboarding?.status ?? hospital?.onboardingStatus ?? 'pending';
-  const hospitalName = hospital?.name ?? onboarding?.hospital?.name ?? 'Your Hospital';
+export default function HospitalAdminDashboard({ user, hospital, verification, onLogout }) {
+  const hospitalName = hospital?.name ?? 'Your Hospital';
+  const reviewNotes  = verification?.reviewNotes ?? '';
+  const status       = verification?.status ?? hospital?.onboardingStatus ?? 'pending';
+  const docsSubmitted = verification?.documentsSubmitted ?? false;
 
-  if (status === 'rejected') return <RejectedState hospitalName={hospitalName} onLogout={onLogout} />;
-  if (status !== 'approved') return <PendingState  hospitalName={hospitalName} />;
-  return <ApprovedDashboard user={user} hospital={hospital ?? onboarding?.hospital} onLogout={onLogout} />;
+  if (!docsSubmitted)       return <DocsPendingState hospitalName={hospitalName} />;
+  if (status === 'rejected') return <RejectedState hospitalName={hospitalName} reviewNotes={reviewNotes} onLogout={onLogout} />;
+  if (status !== 'approved') return <PendingState   hospitalName={hospitalName} />;
+  return <ApprovedDashboard user={user} hospital={hospital} onLogout={onLogout} />;
 }

@@ -22,10 +22,7 @@ export const hospitalAdminSignupSchema = z.object({
         .string()
         .min(3, "Hospital registration number is required")
         .max(120),
-    adminIdProofUrl: z.string().min(4, "Admin ID proof URL/path is required"),
-    registrationCertificateUrl: z
-        .string()
-        .min(4, "Registration certificate URL/path is required"),
+    // documents are uploaded separately after signup via /hospital-admin/upload-documents
 });
 
 export const superAdminSignupSchema = z.object({

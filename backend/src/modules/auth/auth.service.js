@@ -100,49 +100,37 @@ export async function signupHospitalAdmin(payload) {
 
             user = (
                 await User.create(
-                    [
-                        {
-                            name: payload.name,
-                            email,
-                            passwordHash,
-                            role: "hospital_admin",
-                            phone: payload.phone,
-                        },
-                    ],
+                    [{ name: payload.name, email, passwordHash, role: "hospital_admin", phone: payload.phone }],
                     { session }
                 )
             )[0];
 
             hospital = (
                 await Hospital.create(
-                    [
-                        {
-                            name: payload.hospitalName,
-                            city: payload.city,
-                            pincode: payload.pincode,
-                            address: payload.address || "",
-                            registrationNumber: payload.hospitalRegistrationNumber,
-                            adminId: user._id,
-                            onboardingStatus: "pending",
-                            isLive: false,
-                        },
-                    ],
+                    [{
+                        name: payload.hospitalName,
+                        city: payload.city,
+                        pincode: payload.pincode,
+                        address: payload.address || "",
+                        registrationNumber: payload.hospitalRegistrationNumber,
+                        adminId: user._id,
+                        onboardingStatus: "pending",
+                        isLive: false,
+                    }],
                     { session }
                 )
             )[0];
 
+            // documents are uploaded in a separate step — start with empty URLs
             verification = (
                 await HospitalAdminVerification.create(
-                    [
-                        {
-                            hospitalAdminId: user._id,
-                            hospitalId: hospital._id,
-                            hospitalRegistrationNumber: payload.hospitalRegistrationNumber,
-                            adminIdProofUrl: payload.adminIdProofUrl,
-                            registrationCertificateUrl: payload.registrationCertificateUrl,
-                            status: "pending",
-                        },
-                    ],
+                    [{
+                        hospitalAdminId: user._id,
+                        hospitalId: hospital._id,
+                        hospitalRegistrationNumber: payload.hospitalRegistrationNumber,
+                        documentsSubmitted: false,
+                        status: "pending",
+                    }],
                     { session }
                 )
             )[0];
@@ -161,17 +149,18 @@ export async function signupHospitalAdmin(payload) {
 
     return {
         ...authPayload(user),
-        onboarding: {
+        hospital: hospital.toJSON(),
+        verification: {
+            id: verification.id,
             status: verification.status,
-            hospital: hospital.toJSON(),
-            verification: verification.toJSON(),
+            documentsSubmitted: verification.documentsSubmitted,
+            reviewNotes: verification.reviewNotes,
         },
     };
 }
 
 export async function login(payload) {
     const email = normalizeEmail(payload.email);
-
     const user = await User.findOne({ email, isActive: true }).populate("hospitalId");
 
     if (!user) {
@@ -184,10 +173,28 @@ export async function login(payload) {
         throw new AppError("Invalid email or password", 401);
     }
 
-    return {
+    const result = {
         ...authPayload(user),
         hospital: user.hospitalId ? user.hospitalId.toJSON() : null,
     };
+
+    // attach verification state for hospital admins so the frontend knows
+    // whether to show the document upload step or the dashboard
+    if (user.role === "hospital_admin") {
+        const verification = await HospitalAdminVerification.findOne({
+            hospitalAdminId: user._id,
+        });
+        if (verification) {
+            result.verification = {
+                id: verification.id,
+                status: verification.status,
+                documentsSubmitted: verification.documentsSubmitted,
+                reviewNotes: verification.reviewNotes,
+            };
+        }
+    }
+
+    return result;
 }
 
 export async function getMyProfile(userId) {
