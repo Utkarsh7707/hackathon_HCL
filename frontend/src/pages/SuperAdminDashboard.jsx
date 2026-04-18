@@ -18,6 +18,7 @@ const STATUS_STYLE = {
   pending:  'bg-amber-50 text-amber-700 border-amber-200',
   approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   rejected: 'bg-red-50 text-red-700 border-red-200',
+  suspended:'bg-slate-100 text-slate-700 border-slate-300',
 };
 
 /* ─── document viewer modal ─── */
@@ -101,6 +102,9 @@ function DocModal({ verification, onClose }) {
 function ConfirmModal({ action, hospital, notes, onNotesChange, onConfirm, onCancel, loading }) {
   const ref = useRef(null);
   const isApprove = action === 'approve';
+  const isReject = action === 'reject';
+  const isBlacklist = action === 'blacklist';
+  const isUnblacklist = action === 'unblacklist';
 
   useEffect(() => {
     gsap.fromTo(ref.current,
@@ -112,22 +116,35 @@ function ConfirmModal({ action, hospital, notes, onNotesChange, onConfirm, onCan
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div ref={ref} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${isApprove ? 'bg-emerald-100' : 'bg-red-100'}`}>
-          {isApprove ? <CheckCircle2 size={24} className="text-emerald-600" /> : <XCircle size={24} className="text-red-600" />}
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${isApprove || isUnblacklist ? 'bg-emerald-100' : isBlacklist ? 'bg-slate-200' : 'bg-red-100'}`}>
+          {isApprove || isUnblacklist
+            ? <CheckCircle2 size={24} className="text-emerald-600" />
+            : <XCircle size={24} className={isBlacklist ? 'text-slate-700' : 'text-red-600'} />
+          }
         </div>
         <div className="text-center space-y-1">
-          <p className="font-bold text-slate-800">{isApprove ? 'Approve Hospital?' : 'Reject Application?'}</p>
+          <p className="font-bold text-slate-800">
+            {isApprove && 'Approve Hospital?'}
+            {isReject && 'Reject Application?'}
+            {isBlacklist && 'Blacklist Hospital?'}
+            {isUnblacklist && 'Restore Hospital Access?'}
+          </p>
           <p className="text-sm text-slate-500">{hospital}</p>
         </div>
         <div className="space-y-1">
           <label className="text-xs font-semibold text-slate-600">
-            Review notes {isApprove ? '(optional)' : '(required)'}
+            Review notes {(isApprove || isUnblacklist) ? '(optional)' : '(required)'}
           </label>
           <textarea
             rows={3}
             value={notes}
             onChange={(e) => onNotesChange(e.target.value)}
-            placeholder={isApprove ? 'Any notes for the hospital admin…' : 'Reason for rejection (will be shown to admin)…'}
+            placeholder={
+              isApprove ? 'Any notes for the hospital admin…'
+                : isReject ? 'Reason for rejection (will be shown to admin)…'
+                  : isBlacklist ? 'Reason for blacklisting (access will be revoked)…'
+                    : 'Reason for restoring access…'
+            }
             className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
           />
         </div>
@@ -137,11 +154,17 @@ function ConfirmModal({ action, hospital, notes, onNotesChange, onConfirm, onCan
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading || (!isApprove && !notes.trim())}
+            disabled={loading || ((isReject || isBlacklist) && !notes.trim())}
             className={`flex-1 py-2.5 text-sm font-semibold text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5
-              ${isApprove ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}
+              ${isApprove || isUnblacklist
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : isBlacklist
+                  ? 'bg-slate-700 hover:bg-slate-800'
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
           >
-            {loading ? <><Loader2 size={13} className="animate-spin" /> Processing…</> : isApprove ? 'Approve' : 'Reject'}
+            {loading ? <><Loader2 size={13} className="animate-spin" /> Processing…</> :
+              isApprove ? 'Approve' : isReject ? 'Reject' : isBlacklist ? 'Blacklist' : 'Restore'}
           </button>
         </div>
       </div>
@@ -192,6 +215,7 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
     pending:  applications.filter((a) => a.status === 'pending').length,
     approved: applications.filter((a) => a.status === 'approved').length,
     rejected: applications.filter((a) => a.status === 'rejected').length,
+    suspended: applications.filter((a) => a.status === 'suspended').length,
     total:    applications.length,
   };
 
@@ -210,11 +234,26 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
     if (!confirm) return;
     setActionLoading(true);
     try {
-      await superAdminApi.decide(token, confirm.id, confirm.action, notes);
+      if (['approve', 'reject'].includes(confirm.action)) {
+        await superAdminApi.decide(token, confirm.id, confirm.action, notes);
+      } else if (confirm.action === 'blacklist') {
+        await superAdminApi.blacklist(token, confirm.id, notes);
+      } else if (confirm.action === 'unblacklist') {
+        await superAdminApi.unblacklist(token, confirm.id, notes);
+      }
+
       setApplications((prev) =>
-        prev.map((a) =>
-          a.id === confirm.id ? { ...a, status: confirm.action === 'approve' ? 'approved' : 'rejected', reviewNotes: notes } : a
-        )
+        prev.map((a) => {
+          if (a.id !== confirm.id) return a;
+
+          let nextStatus = a.status;
+          if (confirm.action === 'approve') nextStatus = 'approved';
+          if (confirm.action === 'reject') nextStatus = 'rejected';
+          if (confirm.action === 'blacklist') nextStatus = 'suspended';
+          if (confirm.action === 'unblacklist') nextStatus = 'approved';
+
+          return { ...a, status: nextStatus, reviewNotes: notes };
+        })
       );
       setConfirm(null);
       setNotes('');
@@ -244,7 +283,7 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
           <StatCard label="Pending Review"  value={counts.pending}  icon={ClipboardList}  color="amber"   delay={0} />
           <StatCard label="Approved"        value={counts.approved} icon={CheckCircle2}   color="emerald" delay={0.06} />
           <StatCard label="Rejected"        value={counts.rejected} icon={XCircle}        color="red"     delay={0.12} />
-          <StatCard label="Total"           value={counts.total}    icon={Building2}      color="blue"    delay={0.18} />
+          <StatCard label="Blacklisted"     value={counts.suspended} icon={AlertCircle}   color="slate"   delay={0.18} />
         </div>
 
         {/* applications panel */}
@@ -265,7 +304,7 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
             </div>
             <div className="flex items-center gap-2">
               <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                {['pending', 'approved', 'rejected', 'all'].map((f) => (
+                {['pending', 'approved', 'rejected', 'suspended', 'all'].map((f) => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
@@ -347,6 +386,24 @@ export default function SuperAdminDashboard({ auth, user, onLogout }) {
                             <XCircle size={12} /> Reject
                           </button>
                         </>
+                      )}
+
+                      {(app.status === 'approved' || app.status === 'pending' || app.status === 'rejected') && (
+                        <button
+                          onClick={() => { setConfirm({ action: 'blacklist', id: app.id, hospitalName: app.hospital?.name }); setNotes(''); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-all"
+                        >
+                          <XCircle size={12} /> Blacklist
+                        </button>
+                      )}
+
+                      {app.status === 'suspended' && (
+                        <button
+                          onClick={() => { setConfirm({ action: 'unblacklist', id: app.id, hospitalName: app.hospital?.name }); setNotes(''); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all"
+                        >
+                          <CheckCircle2 size={12} /> Restore Access
+                        </button>
                       )}
                     </div>
                   </div>

@@ -69,3 +69,33 @@ export async function reviewVerification(verificationId, reviewerAdminId, decisi
         hospital:    hospital?.toJSON() ?? null,
     };
 }
+
+export async function setHospitalAccessState(verificationId, reviewerAdminId, action, notes = "") {
+    const verification = await HospitalAdminVerification.findById(verificationId);
+
+    if (!verification) {
+        throw new AppError("Verification record not found", 404);
+    }
+
+    const isBlacklist = action === "blacklist";
+    const newStatus = isBlacklist ? "suspended" : "approved";
+
+    verification.status = newStatus;
+    verification.reviewedBy = reviewerAdminId;
+    verification.reviewNotes = notes;
+    await verification.save();
+
+    const hospital = await Hospital.findById(verification.hospitalId);
+    if (hospital) {
+        hospital.onboardingStatus = newStatus;
+        hospital.isLive = !isBlacklist;
+        await hospital.save();
+    }
+
+    return {
+        id: verification.id,
+        status: verification.status,
+        reviewNotes: verification.reviewNotes,
+        hospital: hospital?.toJSON() ?? null,
+    };
+}

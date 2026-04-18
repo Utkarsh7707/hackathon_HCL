@@ -19,4 +19,16 @@ export const superAdminApi = {
       method: 'PATCH',
       body: JSON.stringify({ decision, notes }),
     }),
+
+  blacklist: (token, verificationId, notes = '') =>
+    authFetch(token, `/super-admin/verifications/${verificationId}/blacklist`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
+    }),
+
+  unblacklist: (token, verificationId, notes = '') =>
+    authFetch(token, `/super-admin/verifications/${verificationId}/unblacklist`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
+    }),
 };
