@@ -139,14 +139,10 @@ export default function AuthPage({ onAuthSuccess }) {
       const c = required(fields.city, 'City');
       const pin = required(fields.pincode, 'Pincode') || minLen(fields.pincode, 4, 'Pincode');
       const reg = required(fields.hospitalRegistrationNumber, 'Registration number');
-      const id = required(fields.adminIdProofUrl, 'Admin ID proof');
-      const cert = required(fields.registrationCertificateUrl, 'Registration certificate');
       if (hn) errs.hospitalName = hn;
       if (c) errs.city = c;
       if (pin) errs.pincode = pin;
       if (reg) errs.hospitalRegistrationNumber = reg;
-      if (id) errs.adminIdProofUrl = id;
-      if (cert) errs.registrationCertificateUrl = cert;
     }
     return errs;
   };
@@ -183,8 +179,6 @@ export default function AuthPage({ onAuthSuccess }) {
           name: fields.name, email: fields.email, password: fields.password,
           hospitalName: fields.hospitalName, city: fields.city, pincode: fields.pincode,
           hospitalRegistrationNumber: fields.hospitalRegistrationNumber,
-          adminIdProofUrl: fields.adminIdProofUrl,
-          registrationCertificateUrl: fields.registrationCertificateUrl,
         };
         if (fields.phone.trim()) body.phone = fields.phone.trim();
         if (fields.address.trim()) body.address = fields.address.trim();
@@ -353,10 +347,10 @@ export default function AuthPage({ onAuthSuccess }) {
                       </div>
                       <Field label="Address" name="address" value={fields.address} onChange={set} error={fieldErrors.address} placeholder="123, Main Road" optional />
                       <Field label="Registration number" name="hospitalRegistrationNumber" value={fields.hospitalRegistrationNumber} onChange={set} error={fieldErrors.hospitalRegistrationNumber} placeholder="MH-HOS-2024-XXXXX" />
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Admin ID proof URL" name="adminIdProofUrl" value={fields.adminIdProofUrl} onChange={set} error={fieldErrors.adminIdProofUrl} placeholder="/docs/id.pdf" />
-                        <Field label="Reg. certificate URL" name="registrationCertificateUrl" value={fields.registrationCertificateUrl} onChange={set} error={fieldErrors.registrationCertificateUrl} placeholder="/docs/cert.pdf" />
-                      </div>
+                      <p className="text-xs text-slate-400 bg-slate-50 rounded-xl p-3 flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5">ℹ</span>
+                        You'll upload ID proof and registration certificate after signing up.
+                      </p>
                     </>
                   )}
 

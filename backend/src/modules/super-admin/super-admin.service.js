@@ -1,0 +1,71 @@
+import HospitalAdminVerification from "../../models/HospitalAdminVerification.js";
+import Hospital from "../../models/Hospital.js";
+import { AppError } from "../../utils/appError.js";
+
+export async function getVerifications(statusFilter) {
+    const query = { documentsSubmitted: true };
+    if (statusFilter !== "all") query.status = statusFilter;
+
+    const verifications = await HospitalAdminVerification.find(query)
+        .populate("hospitalAdminId", "name email phone")
+        .populate("hospitalId",      "name city pincode registrationNumber address")
+        .sort({ createdAt: -1 });
+
+    return verifications.map((v) => ({
+        id:                          v.id,
+        status:                      v.status,
+        documentsSubmitted:          v.documentsSubmitted,
+        adminIdProofUrl:             v.adminIdProofUrl,
+        registrationCertificateUrl:  v.registrationCertificateUrl,
+        hospitalRegistrationNumber:  v.hospitalRegistrationNumber,
+        reviewNotes:                 v.reviewNotes,
+        submittedAt:                 v.updatedAt,
+        admin: {
+            id:    v.hospitalAdminId?._id,
+            name:  v.hospitalAdminId?.name,
+            email: v.hospitalAdminId?.email,
+            phone: v.hospitalAdminId?.phone,
+        },
+        hospital: v.hospitalId ? {
+            id:                 v.hospitalId._id,
+            name:               v.hospitalId.name,
+            city:               v.hospitalId.city,
+            pincode:            v.hospitalId.pincode,
+            registrationNumber: v.hospitalId.registrationNumber,
+            address:            v.hospitalId.address,
+        } : null,
+    }));
+}
+
+export async function reviewVerification(verificationId, reviewerAdminId, decision, notes) {
+    const verification = await HospitalAdminVerification.findById(verificationId);
+
+    if (!verification) {
+        throw new AppError("Verification record not found", 404);
+    }
+
+    if (!["pending"].includes(verification.status)) {
+        throw new AppError(`Cannot review a verification that is already '${verification.status}'`, 400);
+    }
+
+    const newStatus  = decision === "approve" ? "approved" : "rejected";
+    verification.status      = newStatus;
+    verification.reviewedBy  = reviewerAdminId;
+    verification.reviewNotes = notes;
+    await verification.save();
+
+    // mirror the status on the Hospital document
+    const hospital = await Hospital.findById(verification.hospitalId);
+    if (hospital) {
+        hospital.onboardingStatus = newStatus;
+        hospital.isLive           = newStatus === "approved";
+        await hospital.save();
+    }
+
+    return {
+        id:          verification.id,
+        status:      verification.status,
+        reviewNotes: verification.reviewNotes,
+        hospital:    hospital?.toJSON() ?? null,
+    };
+}
