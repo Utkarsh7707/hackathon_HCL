@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "seed": "node src/scripts/seed.js",
+    "seed:force": "node src/scripts/seed.js --force",
     "test": "echo \"No tests configured yet\""
   },
   "keywords": [],
