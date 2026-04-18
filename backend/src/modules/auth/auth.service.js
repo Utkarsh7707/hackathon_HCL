@@ -4,6 +4,7 @@ import env from "../../config/env.js";
 import User from "../../models/User.js";
 import Hospital from "../../models/Hospital.js";
 import HospitalAdminVerification from "../../models/HospitalAdminVerification.js";
+import { verifyHospitalRegistrationNumber } from "../../services/govt-registry.service.js";
 import { AppError } from "../../utils/appError.js";
 import { signAccessToken } from "../../utils/jwt.js";
 
@@ -75,6 +76,11 @@ export async function signupSuperAdmin(payload) {
 
 export async function signupHospitalAdmin(payload) {
     const email = normalizeEmail(payload.email);
+    const registrationVerification = await verifyHospitalRegistrationNumber(
+        payload.hospitalRegistrationNumber
+    );
+    const normalizedRegistrationNumber = registrationVerification.registrationNumber;
+
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -82,7 +88,7 @@ export async function signupHospitalAdmin(payload) {
     }
 
     const existingRegistration = await Hospital.findOne({
-        registrationNumber: payload.hospitalRegistrationNumber,
+        registrationNumber: normalizedRegistrationNumber,
     });
 
     if (existingRegistration) {
@@ -112,7 +118,7 @@ export async function signupHospitalAdmin(payload) {
                         city: payload.city,
                         pincode: payload.pincode,
                         address: payload.address || "",
-                        registrationNumber: payload.hospitalRegistrationNumber,
+                        registrationNumber: normalizedRegistrationNumber,
                         adminId: user._id,
                         onboardingStatus: "pending",
                         isLive: false,
@@ -127,7 +133,7 @@ export async function signupHospitalAdmin(payload) {
                     [{
                         hospitalAdminId: user._id,
                         hospitalId: hospital._id,
-                        hospitalRegistrationNumber: payload.hospitalRegistrationNumber,
+                        hospitalRegistrationNumber: normalizedRegistrationNumber,
                         documentsSubmitted: false,
                         status: "pending",
                     }],

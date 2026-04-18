@@ -10,6 +10,9 @@ const env = {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
     bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS || 10),
     superAdminSetupKey: process.env.SUPER_ADMIN_SETUP_KEY,
+    cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
+    cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
 };
 
 export default env;
