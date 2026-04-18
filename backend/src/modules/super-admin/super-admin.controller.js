@@ -1,4 +1,9 @@
-import { getVerifications, reviewVerification, setHospitalAccessState } from "./super-admin.service.js";
+import {
+    getVerifications,
+    reviewVerification,
+    setHospitalAccessState,
+    getVaccineCoverage,
+} from "./super-admin.service.js";
 import { AppError } from "../../utils/appError.js";
 
 export async function listVerifications(req, res) {
@@ -49,4 +54,9 @@ export async function unblacklistHospital(req, res) {
         message: "Hospital access restored successfully.",
         data: result,
     });
+}
+
+export async function listVaccineCoverage(_req, res) {
+    const data = await getVaccineCoverage();
+    return res.status(200).json({ success: true, data });
 }

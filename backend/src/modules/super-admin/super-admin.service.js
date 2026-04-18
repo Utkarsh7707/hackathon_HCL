@@ -1,5 +1,7 @@
 import HospitalAdminVerification from "../../models/HospitalAdminVerification.js";
 import Hospital from "../../models/Hospital.js";
+import HospitalVaccine from "../../models/HospitalVaccine.js";
+import Vaccine from "../../models/Vaccine.js";
 import { AppError } from "../../utils/appError.js";
 
 export async function getVerifications(statusFilter) {
@@ -98,4 +100,47 @@ export async function setHospitalAccessState(verificationId, reviewerAdminId, ac
         reviewNotes: verification.reviewNotes,
         hospital: hospital?.toJSON() ?? null,
     };
+}
+
+export async function getVaccineCoverage() {
+    const [vaccines, inventoryRows] = await Promise.all([
+        Vaccine.find({ isActive: true }).sort({ name: 1 }).lean(),
+        HospitalVaccine.find({ isActive: true })
+            .populate("hospitalId", "name city pincode onboardingStatus isLive")
+            .populate("vaccineId", "name type")
+            .lean(),
+    ]);
+
+    const coverageByVaccineId = new Map();
+
+    for (const row of inventoryRows) {
+        if (!row.vaccineId || !row.hospitalId) continue;
+
+        const vaccineId = String(row.vaccineId._id);
+        if (!coverageByVaccineId.has(vaccineId)) coverageByVaccineId.set(vaccineId, []);
+
+        coverageByVaccineId.get(vaccineId).push({
+            hospitalId: String(row.hospitalId._id),
+            hospitalName: row.hospitalId.name,
+            city: row.hospitalId.city,
+            pincode: row.hospitalId.pincode,
+            onboardingStatus: row.hospitalId.onboardingStatus,
+            isLive: row.hospitalId.isLive,
+            totalStock: row.totalStock,
+            availableStock: row.availableStock,
+            pricePerDose: row.pricePerDose,
+        });
+    }
+
+    return vaccines.map((v) => {
+        const providers = coverageByVaccineId.get(String(v._id)) ?? [];
+        return {
+            id: String(v._id),
+            name: v.name,
+            type: v.type,
+            manufacturer: v.manufacturer,
+            providersCount: providers.length,
+            providers,
+        };
+    });
 }
