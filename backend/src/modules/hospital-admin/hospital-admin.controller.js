@@ -1,7 +1,7 @@
 import { uploadHospitalDocuments, fetchMyStatus } from "./hospital-admin.service.js";
 
 export async function uploadDocuments(req, res) {
-    const adminIdProof           = req.files?.adminIdProof?.[0];
+    const adminIdProof = req.files?.adminIdProof?.[0];
     const registrationCertificate = req.files?.registrationCertificate?.[0];
 
     if (!adminIdProof || !registrationCertificate) {
@@ -12,8 +12,16 @@ export async function uploadDocuments(req, res) {
     }
 
     const result = await uploadHospitalDocuments(req.user.id, {
-        adminIdProofPath:            adminIdProof.filename,
-        registrationCertificatePath: registrationCertificate.filename,
+        adminIdProofFile: {
+            buffer: adminIdProof.buffer,
+            mimeType: adminIdProof.mimetype,
+            originalName: adminIdProof.originalname,
+        },
+        registrationCertificateFile: {
+            buffer: registrationCertificate.buffer,
+            mimeType: registrationCertificate.mimetype,
+            originalName: registrationCertificate.originalname,
+        },
     });
 
     return res.status(200).json({
